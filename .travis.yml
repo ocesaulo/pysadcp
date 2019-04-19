@@ -1,0 +1,12 @@
+# Config file for automatic testing at travis-ci.org
+
+language: python
+python:
+  - 3.6
+  - 3.5
+
+install: 
+    - "pip install -r requirements.txt --use-mirrors"
+
+script:
+    - pytest -v --color=yes --cov=pysadcp tests

@@ -1,0 +1,3 @@
+pip
+Sphinx
+pytest
