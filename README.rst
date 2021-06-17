@@ -29,6 +29,8 @@ Usage/Example
 Requirements
 ^^^^^^^^^^^^
 
+Requires pycurrents and CODAS. See
+
 Compatibility
 -------------
 
