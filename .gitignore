@@ -38,6 +38,8 @@ doc/_build/
 *$
 *.bak
 
+# atom FTP package:
+.ftpconfig
+
 # Everything on the data dir
 /data/
-
