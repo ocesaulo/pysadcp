@@ -41,5 +41,8 @@ doc/_build/
 # atom FTP package:
 .ftpconfig
 
+# the local storage of pycurrents/codas code
+/adcpcode/
+
 # Everything on the data dir
 /data/
