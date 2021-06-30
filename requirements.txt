@@ -1,3 +1,17 @@
 pip
 Sphinx
 pytest
+numpy
+scipy
+mercurial
+pyflakes
+flake8
+matplotlib
+ipython
+ipyparallel
+qtconsole
+pyqt
+pytest-qt
+basemap
+basemap-data-hires
+netcdf4

@@ -8,3 +8,16 @@ dependencies:
 - python>=3.5
 - numpy
 - scipy
+- mercurial
+- pip
+- pyflakes
+- flake8
+- matplotlib
+- ipython
+- ipyparallel
+- qtconsole
+- pyqt
+- pytest-qt
+- basemap
+- basemap-data-hires
+- netcdf4
