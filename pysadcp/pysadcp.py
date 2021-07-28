@@ -7,6 +7,8 @@ import numpy as np
 import os
 import re
 from pycurrents.data.navcalc import lonlat_inside_km_radius
+from pycurrents.data.navcalc import great_circle_distance
+from pycurrents.codas import get_txy
 
 
 def read_meta_from_bft(bftfile):
@@ -228,6 +230,191 @@ def convert_lonE_to_lonEW(lon):
             return lon
     else:
         return lon
+
+
+def read_nav_from_db_list(databases, dlims=None, N=1, Delta=0.):
+
+    if dlims is not None:
+        xmin, xmax, ymin, ymax = dlims[0], dlims[1], dlims[2], dlims[-1]
+        xmin = convert_lonEW_to_lonE(xmin)  # useful to go across pacific dateline
+        xmax = convert_lonEW_to_lonE(xmax)
+
+    dpassed = []
+    dfailed = []
+    alllats = []
+    alllons = []
+    years = []
+    months = []
+    cruise_ids = []
+    instru_ids = []
+    vessel_ids = []
+    sac_ids = []
+    for d in databases:
+
+        try:
+            dataxy = get_txy(d)
+
+        except ValueError as e:
+            if "has 2 block directories" in str(e):
+                print('There was a problem reading this db (2 block dirs), skipping')
+                dfailed.append(d)
+                pass
+            elif 'has no block directory' in str(e):
+                print('No codas blk data in path of db, skipping')
+                dfailed.append(d)
+                pass
+            else:
+                print('Could not read this db path for unknown reason, aborting')
+                break
+        else:
+            lats = dataxy["lat"]
+            lons = convert_lonEW_to_lonE(dataxy["lon"])
+            # lons = dataxy["lon"]
+
+            if dlims is not None:
+                idx = np.logical_and(lons >= xmin, lons <= xmax)
+                idy = np.logical_and(lats >= ymin, lats <= ymax)
+                ids = np.logical_and(idx, idy)
+
+                # check if lat_final is same size as lon_final (maybe should be assert)
+                if len(lats[ids]) != len(lons[ids]):
+                    raise Exception('Indexed lat and lon not of same size!')
+            else:
+                ids = slice(0, -1)
+
+            if len(lons[ids]) >= N and '.ignore' not in d:
+                # check if earth distance covered is at least equal to Delta:
+                dl = great_circle_distance(dataxy.lon[ids][:-1], lats[ids][:-1],
+                                           dataxy.lon[ids][1:], lats[ids][1:]) / 1e3
+                if dl.sum() >= Delta:
+                    dpassed.append(d)
+                    alllons.append(dataxy.lon)
+                    alllats.append(lats)
+                    print(d + ' passed, dist covered: ' + str(np.round(dl.sum())) + ' km')
+
+                    years.append(dataxy.yearbase)
+                    months.append(dataxy.ymdhms[ids][len(dataxy.ymdhms[ids]) // 2, 1])
+
+                    bftfile = d + '.bft'
+                    dbinfo_file = os.path.split(os.path.split(d)[0])[0] + '/dbinfo.txt'
+                    if os.path.exists(bftfile):
+                        cruise_id, instru_id, vessel_id, sac_id = read_meta_from_bft(bftfile)
+                        cruise_ids.append(cruise_id)
+                        instru_ids.append(instru_id)
+                        vessel_ids.append(instru_id)
+                        sac_ids.append(instru_id)
+                    elif os.path.exists(dbinfo_file):
+                        cruise_id, instru_id, vessel_id = read_meta_from_dbinfo(dbinfo_file)
+                        cruise_ids.append(cruise_id)
+                        instru_ids.append(instru_id)
+                        vessel_ids.append(instru_id)
+                        sac_ids.append('None/UH?')
+                    else:
+                        print('No meta data file found!')
+                        cruise_ids.append('unknown_no_metafile')
+                        instru_ids.append('unknown_no_metafile')
+                        vessel_ids.append('unknown_no_metafile')
+                        sac_ids.append('unknown_no_metafile')
+
+    nav_data = np.rec.fromarrays((dpassed, cruise_ids, instru_id, vessel_ids,
+                                  sac_ids, years, months, alllons, alllats),
+                                 names=('db path', 'cruise id', 'sonar id',
+                                        'vessel id', 'SAC id', 'yearbase',
+                                        'month', 'longitude', 'latitude')
+                                 )
+
+    return nav_data, dfailed
+
+
+def read_gps_txt(gpsfile, use_encoding=False):
+    if use_encoding:
+        gpsdat = np.genfromtxt(gpsfile, encoding='utf-8')
+        # dday = gpsdat[:, 0]
+        lon = gpsdat[:, 1]
+        lat = gpsdat[:, 2]
+        return lon, lat
+    else:
+        gpsdat = np.genfromtxt(gpsfile)
+        try:
+            # gpsdat = np.genfromtxt(gpsfile)
+            lon = gpsdat[:, 1]
+            lat = gpsdat[:, 2]
+            return lon, lat
+        except IndexError:
+            # if 'Some errors were detected' in e:
+            return None, None
+
+
+def read_nav_from_gps_list(gpsfiles, dlims=None, N=1, Delta=0.):
+
+    if dlims is not None:
+        xmin, xmax, ymin, ymax = dlims[0], dlims[1], dlims[2], dlims[-1]
+        xmin = convert_lonEW_to_lonE(xmin)  # useful to go across pacific dateline
+        xmax = convert_lonEW_to_lonE(xmax)
+
+    dpassed = []
+    alllats = []
+    alllons = []
+    cruise_ids = []
+    instru_ids = []
+    vessel_ids = []
+    dfailed = []
+
+    for gpsfile in gpsfiles:
+
+        try:
+            lons, lats = read_gps_txt(gpsfile)
+        except UnicodeDecodeError:
+            # lons, lats = read_gps_txt(gpsfile, use_encoding=True)
+            dfailed.append(gpsfile)
+            pass
+        except ValueError:
+            # if 'Some errors were detected' in e:
+            dfailed.append(gpsfile)
+            pass
+
+        if lons is None or lats is None:
+            dfailed.append(gpsfile)
+            continue
+
+        lons = convert_lonEW_to_lonE(lons)
+
+        if dlims is not None:
+            idx = np.logical_and(lons >= xmin, lons <= xmax)
+            idy = np.logical_and(lats >= ymin, lats <= ymax)
+            ids = np.logical_and(idx, idy)
+
+            # check if lat_final is same size as lon_final (maybe should be assert)
+            if len(lats[ids]) != len(lons[ids]):
+                raise Exception('Indexed lat and lon not of same size!')
+        else:
+            ids = slice(0, -1)
+
+        if len(lons[ids]) >= N:
+            # check if earth distance covered is at least equal to Delta:
+            dl = great_circle_distance(lons[ids][:-1], lats[ids][:-1],
+                                       lons[ids][1:], lats[ids][1:]) / 1e3
+            if dl.sum() >= Delta:
+                dpassed.append(gpsfile)
+                alllons.append(lons)
+                alllats.append(lats)
+                print(gpsfile + ' passed, dist covered: ' + str(np.round(dl.sum())) + ' km')
+
+                cruise_ids.append(gpsfile.split('/')[-5])
+                instru_ids.append(gpsfile.split('/')[-3])
+                vessel_ids.append(gpsfile.split('/')[-6])
+
+    nav_data = np.rec.fromarrays((dpassed, cruise_ids, instru_ids, vessel_ids,
+                                  alllons, alllats),
+                                 names=('db_path', 'cruise_id', 'sonar_id',
+                                        'vessel_id', 'longitude', 'latitude')
+                                 )
+
+    return nav_data, dfailed
+
+
+def split_transect_by_heading():
+    return new_transects
 
 
 def main():
