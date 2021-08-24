@@ -346,7 +346,7 @@ def check_time_continuity(tsdays, allddays, jump_len=3.):
 
 
 def eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas, cruise_id,
-                        instru_id, vessel_id, sac_id, lut):
+                        instru_id, vessel_id, sac_id, lut, d):
     svel = data.spd
     counter = 0
     for n in range(0, nsegs):
@@ -407,9 +407,10 @@ def eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas, cruise_id,
                 seg_data.depth = data["depth"][c[n]:c[n+1]+1]
                 seg_data.errs = data["e"][c[n]:c[n+1]+1]
                 seg_data.ymdhms = data["ymdhms"][c[n]:c[n+1]+1]
-                month = Mode(data.ymdhms[:, 1], axis=None)[0][0]
-                datuple = (instru_id, cruise_id, vessel_id, sac_id,
-                           data.yearbase, month, lats.min(), lats.max(),
+                month = Mode(data.ymdhms[c[n]:c[n+1]+1, 1], axis=None)[0][0]
+                year = Mode(data.ymdhms[c[n]:c[n+1]+1, 0], axis=None)[0][0]
+                datuple = (instru_id, cruise_id, vessel_id, sac_id, d,
+                           data.yearbase, year, month, lats.min(), lats.max(),
                            lons.min(), lons.max(), g_dist, dcover,
                            seg_len_days, trans_orient, a_spd, data.dep, dts,
                            np.ma.median(dl), ngaps, gap_max, gap_tip, seg_data)
@@ -420,7 +421,7 @@ def eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas, cruise_id,
 
 
 def eval_proc_timeseries(data, ts_len, tinds, nts, dts, lts, rts, cruise_id,
-                         instru_id, vessel_id, sac_id, ts_lut):
+                         instru_id, vessel_id, sac_id, ts_lut, d):
     gndp = int(round(lts / dts) * .9)
     counter = 0
     for n in range(0, nts):
@@ -459,6 +460,12 @@ def eval_proc_timeseries(data, ts_len, tinds, nts, dts, lts, rts, cruise_id,
                 ts_data.svel = data["spd"][tinds[n]]
                 ts_data.u = data["u"][tinds[n]]
                 ts_data.v = data["v"][tinds[n]]
+                ts_data.pg = data["pg"][tinds[n]]
+                ts_data.amp = data["amp"][tinds[n]]
+                ts_data.amp1 = data["amp1"][tinds[n]]
+                ts_data.amp2 = data["amp2"][tinds[n]]
+                ts_data.amp3 = data["amp3"][tinds[n]]
+                ts_data.amp4 = data["amp4"][tinds[n]]
                 ts_data.dday = data["dday"][tinds[n]]
                 ts_data.uship = data["uship"][tinds[n]]
                 ts_data.vship = data["vship"][tinds[n]]
@@ -467,7 +474,7 @@ def eval_proc_timeseries(data, ts_len, tinds, nts, dts, lts, rts, cruise_id,
                 ts_data.ymdhms = data["ymdhms"][tinds[n]]
                 month = Mode(data.ymdhms[tinds[n], 1], axis=None)[0][0]
                 year = Mode(data.ymdhms[tinds[n], 0], axis=None)[0][0]
-                tstuple = (instru_id, cruise_id, vessel_id, sac_id,
+                tstuple = (instru_id, cruise_id, vessel_id, sac_id, d,
                            data.yearbase, year, month, clon, clat,
                            ts_len[n], a_spd, data.dep, dts,
                            ngaps, gap_max, gap_tip, ts_data)
@@ -509,15 +516,16 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts):
         if nsegs > 0:
             lut = eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas,
                                       cruise_id, instru_id, vessel_id, sac_id,
-                                      lut)
+                                      lut, d)
         if nts > 0:
             ts_lut = eval_proc_timeseries(data, ts_len, tinds, nts, dts, lts,
                                           rts, cruise_id, instru_id, vessel_id,
-                                          sac_id, ts_lut)
+                                          sac_id, ts_lut, d)
 
     lut = np.array(lut, dtype=[("inst_id", '<U19'), ("cruise_id", '<U19'),
                                ("vessel_id", '<U19'), ("sac_id", '<U19'),
-                               ('year', 'int32'),
+                               ("db_path", '<U19'),
+                               ('yearbase', 'int32'), ('year', 'int32'),
                                ('month', 'int32'), ('lat_min', 'float32'),
                                ('lat_max', 'float32'), ('lon_min', 'float32'),
                                ('lon_max', 'float32'), ('g_dist', 'float32'),
@@ -533,6 +541,7 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts):
     ts_lut = np.array(ts_lut, dtype=[("inst_id", '<U19'),
                                      ("cruise_id", '<U19'),
                                      ("vessel_id", '<U19'), ("sac_id", '<U19'),
+                                     ("db_path", '<U19'),
                                      ('yearbase', 'int32'), ('year', 'int32'),
                                      ('month', 'int32'), ('lon', 'float32'),
                                      ('lat', 'float32'),
