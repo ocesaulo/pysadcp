@@ -413,8 +413,42 @@ def read_nav_from_gps_list(gpsfiles, dlims=None, N=1, Delta=0.):
     return nav_data, dfailed
 
 
-def split_transect_by_heading():
-    return new_transects
+def split_transect_by_heading(transects, heading_diff_crit=15., len_crit=10):
+    '''split transects by abrupt heading changes'''
+    new_transects = []
+
+    for atran in transects:
+        # meta_vars = [k for k in atran.dtype.fields.keys() if k != 'seg_data']
+        # ndat = [atran[k] for k in atran.dtype.fields.keys() if k != 'seg_data']
+        # ndat = tuple(ndat)
+        atrandata = atran['seg_data']
+        inds = fixed_heading_inds(atrandata, heading_diff_crit, len_crit)
+        for n in range(0, len(inds)-1):
+            if inds[n+1]+1 - inds[n]+1 >= len_crit:
+                # print('inside')
+                ndat = [atran[k] for k in atran.dtype.fields.keys() if k != 'seg_data']
+                new_tran_data = Bunch()
+                for key in atrandata.keys():
+                    new_tran_data[key] = atrandata[key][inds[n]+1:inds[n+1]+1]
+                ndat.append(new_tran_data)
+                new_transects.append(tuple(ndat))
+    new_data = np.array(new_transects, dtype=transects.dtype.descr)
+    return new_data
+
+
+def fixed_heading_inds(atrandata, heading_diff_crit=15., len_crit=10):
+    '''find indices of constant heading transects by abrupt heading changes'''
+    transect_headings = atrandata.headings
+    heading_diffs = np.diff(transect_headings)
+    heading_changes = np.where(np.abs(heading_diffs) > heading_diff_crit)
+
+    # heading_changes_bool = np.abs(heading_diffs) > heading_diff_crit
+
+    inds = np.hstack(([-1, ], heading_changes[0], len(transect_headings)))
+    # split_headings = [transect_headings[inds[n]+1:inds[n+1]+1] for n in range(0, len(inds)-1)]
+    # split_heading_len = np.asarray([len(shd) for shd in split_headings])
+
+    return inds
 
 
 def main():
