@@ -152,6 +152,22 @@ def read_metadata_wrap(data, db):
     return cruise_id, instru_id, vessel_id, sac_id
 
 
+def full_meta_dump(db):
+    bftfile = db + '.bft'
+    dbinfo_file = os.path.split(os.path.split(db)[0])[0] + '/dbinfo.txt'
+    if os.path.exists(bftfile):
+        with open(bftfile, 'r') as meta_file:
+            meta = meta_file.read()
+    elif os.path.exists(dbinfo_file):
+        with open(dbinfo_file, 'r') as meta_file:
+            meta = meta_file.read()
+    else:
+        print('No meta data file found!')
+        meta = 'No meta data file found!'
+
+    return meta
+
+
 def find_stations_restarts(data, mas, tst, lts, rts):
     svel = data.spd  # ship speed timeseries, need to ensure nav masks are same
     gids = svel > mas
@@ -346,7 +362,7 @@ def check_time_continuity(tsdays, allddays, jump_len=3.):
 
 
 def eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas, cruise_id,
-                        instru_id, vessel_id, sac_id, lut, d):
+                        instru_id, vessel_id, sac_id, lut, meta, d):
     svel = data.spd
     counter = 0
     for n in range(0, nsegs):
@@ -413,7 +429,8 @@ def eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas, cruise_id,
                            data.yearbase, year, month, lats.min(), lats.max(),
                            lons.min(), lons.max(), g_dist, dcover,
                            seg_len_days, trans_orient, a_spd, data.dep, dts,
-                           np.ma.median(dl), ngaps, gap_max, gap_tip, seg_data)
+                           np.ma.median(dl), ngaps, gap_max, gap_tip, meta,
+                           seg_data)
                 lut.append(datuple)
                 counter = counter + 1
     print("final number of usable transects for this db is " + str(counter))
@@ -421,7 +438,7 @@ def eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas, cruise_id,
 
 
 def eval_proc_timeseries(data, ts_len, tinds, nts, dts, lts, rts, cruise_id,
-                         instru_id, vessel_id, sac_id, ts_lut, d):
+                         instru_id, vessel_id, sac_id, ts_lut, meta, d):
     gndp = int(round(lts / dts) * .9)
     counter = 0
     for n in range(0, nts):
@@ -477,7 +494,7 @@ def eval_proc_timeseries(data, ts_len, tinds, nts, dts, lts, rts, cruise_id,
                 tstuple = (instru_id, cruise_id, vessel_id, sac_id, d,
                            data.yearbase, year, month, clon, clat,
                            ts_len[n], a_spd, data.dep, dts,
-                           ngaps, gap_max, gap_tip, ts_data)
+                           ngaps, gap_max, gap_tip, meta, ts_data)
                 ts_lut.append(tstuple)
                 counter = counter + 1
     print("final number of usable timeseries for this db is " + str(counter))
@@ -507,6 +524,8 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts):
         g_dists, c, ts_len, tinds, dts = find_stations_restarts(data, mas,
                                                                 tst, lts, rts)
 
+        meta = full_meta_dump(d)
+
         nsegs = len(g_dists)
         print("DB " + d + " has", nsegs, "transects to evaluate")
 
@@ -516,11 +535,11 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts):
         if nsegs > 0:
             lut = eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas,
                                       cruise_id, instru_id, vessel_id, sac_id,
-                                      lut, d)
+                                      lut, meta, d)
         if nts > 0:
             ts_lut = eval_proc_timeseries(data, ts_len, tinds, nts, dts, lts,
                                           rts, cruise_id, instru_id, vessel_id,
-                                          sac_id, ts_lut, d)
+                                          sac_id, ts_lut, meta, d)
 
     lut = np.array(lut, dtype=[("inst_id", '<U19'), ("cruise_id", '<U19'),
                                ("vessel_id", '<U19'), ("sac_id", '<U19'),
@@ -535,7 +554,7 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts):
                                ('dep', 'O'),
                                ('dt', 'float16'), ('dlm', 'float16'),
                                ('ngaps', 'O'), ('gap_max', 'O'),
-                               ('gap_tipical', 'O'),
+                               ('gap_tipical', 'O'), ("meta_dump", '<U50000'),
                                ('seg_data', 'O')])
 
     ts_lut = np.array(ts_lut, dtype=[("inst_id", '<U19'),
@@ -549,6 +568,7 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts):
                                      ('avg_spd', 'float32'), ('dep', 'O'),
                                      ('dt', 'float16'), ('ngaps', 'O'),
                                      ('gap_max', 'O'), ('gap_tipical', 'O'),
+                                     ("meta_dump", '<U50000'),
                                      ('ts_data', 'O')])
     return lut, ts_lut
 
