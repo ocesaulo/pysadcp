@@ -18,6 +18,7 @@ from pycurrents.data.navcalc import lonlat_inside_km_radius
 from pycurrents.data.navcalc import (great_circle_distance, diffxy_from_lonlat)
 from pycurrents.system import Bunch
 from pycurrents.file import npzfile
+from pycurrents.adcp.panelplotter import get_netCDF_data
 from scipy.stats import mode as Mode
 from pysadcp import read_meta_from_bft
 from pysadcp import read_meta_from_dbinfo
@@ -54,8 +55,9 @@ class RunParams:
 def load_dbs_list(dbs_list):
     '''
         Reads a string input with path(s) to CODAS databases or list/arrays of
-        paths. The string can be a path to a directory containing many
-        databses, in which case it must end w/ either * or /.
+        paths to dbs. For netCDF files (long) the paths must contain the
+        filename and extension. The string also can be a path to a directory
+        containing many databases, in which case it must end w/ either * or /.
         Returns a list with said path(s).
     '''
     if isinstance(dbs_list, (str, bytes)):
@@ -66,8 +68,12 @@ def load_dbs_list(dbs_list):
             dbslist = []
             parent_dir = os.path.split(dbs_list)[0]
             for root, dirnames, filenames in os.walk(parent_dir):
-                for filename in fnmatch.filter(filenames, '*dir.blk'):
-                    dbslist.append(os.path.join(root, filename[:-7]))
+                if len(fnmatch.filter(filenames, '*dir.blk')) > 0:
+                    for filename in fnmatch.filter(filenames, '*dir.blk'):
+                        dbslist.append(os.path.join(root, filename[:-7]))
+                elif len(fnmatch.filter(filenames, '*long.nc')) > 0:
+                    for filename in fnmatch.filter(filenames, '*long.nc'):
+                        dbslist.append(os.path.join(root, filename))
             return dbslist
         else:
             print('Interpreting string input as a path to a single db')
@@ -106,7 +112,7 @@ def prep_out_dir(out_dir, out_fname):
 
 
 def save_lut(output_file_id, lut):
-    '''save the look-up table and segment database'''
+    '''save the look-up table of transects database'''
     # (should PICKLE? if class/masked)
     try:
         npzfile.savez(output_file_id, seg_dbase=lut)
@@ -117,21 +123,28 @@ def save_lut(output_file_id, lut):
 
 
 def read_codas_db_wrap(db):
-    try:
-        data = get_profiles(db, diagnostics=True)  # get all data
+    if db[-2:].lower() == 'nc':
+        # log.info('trying netCDF file %s' % (db))
+        data = get_netCDF_data(fname)
+        # log.info('netCDF: success')
+        # success = True
         return data
-    except ValueError as e:
-        if "has 2 block directories" in str(e):
-            print('\nThere was a problem reading this db (2 block dirs), skipping')
-            print('This db should not be in the list!')
-            return None
-        elif 'has no block directory' in str(e):
-            print('\nNo codas blk data in path of db, skipping')
-            print('This db should not be in the list!')
-            return None
-        else:
-            print('\nCould not read this db path for unknown reason, skipping')
-            return None
+    else:
+        try:
+            data = get_profiles(db, diagnostics=True)  # get all data
+            return data
+        except ValueError as e:
+            if "has 2 block directories" in str(e):
+                print('\nThere was a problem reading this db (2 block dirs), skipping')
+                print('This db should not be in the list!')
+                return None
+            elif 'has no block directory' in str(e):
+                print('\nNo codas blk data in path of db, skipping')
+                print('This db should not be in the list!')
+                return None
+            else:
+                print('\nCould not read this db path for unknown reason, skipping')
+                return None
 
 
 def read_metadata_wrap(data, db):
