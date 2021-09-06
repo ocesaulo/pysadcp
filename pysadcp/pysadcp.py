@@ -101,7 +101,7 @@ def read_meta_from_dbinfo(dbinfo_file):
 
 def read_bad_meta(inF):
     '''
-    Helps determining sonar characteristics from the meta data text files
+    Helps determine sonar characteristics from the meta data text files
     '''
 
     pt = ('narrowband', 'broadband', 'broad band', 'narrow band', 'Narrowband',
