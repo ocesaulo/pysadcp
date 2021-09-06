@@ -556,7 +556,7 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts):
 
     lut = np.array(lut, dtype=[("inst_id", '<U19'), ("cruise_id", '<U19'),
                                ("vessel_id", '<U19'), ("sac_id", '<U19'),
-                               ("db_path", '<U19'),
+                               ("db_path", '<U500'),
                                ('yearbase', 'int32'), ('year', 'int32'),
                                ('month', 'int32'), ('lat_min', 'float32'),
                                ('lat_max', 'float32'), ('lon_min', 'float32'),
@@ -573,7 +573,7 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts):
     ts_lut = np.array(ts_lut, dtype=[("inst_id", '<U19'),
                                      ("cruise_id", '<U19'),
                                      ("vessel_id", '<U19'), ("sac_id", '<U19'),
-                                     ("db_path", '<U19'),
+                                     ("db_path", '<U500'),
                                      ('yearbase', 'int32'), ('year', 'int32'),
                                      ('month', 'int32'), ('lon', 'float32'),
                                      ('lat', 'float32'),
