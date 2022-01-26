@@ -47,7 +47,7 @@ setup(
     dependency_links=dependency_links,
     setup_requires=setup_requirements,
     test_suite='tests',
-    tests_require=test_requirements,
+    tests_require=tests_requirements,
     keywords='pysadcp',
     classifiers=[
         'Programming Language :: Python :: 3.6',
