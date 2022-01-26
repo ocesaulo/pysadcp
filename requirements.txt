@@ -10,7 +10,6 @@ matplotlib
 ipython
 ipyparallel
 qtconsole
-pyqt
 pytest-qt
 basemap
 basemap-data-hires
