@@ -32,7 +32,7 @@ class RunParams:
         self.tst = tst  # tolarated stop time in hrs (longer will be split)
         self.mtl = mtl  # minimum segment/transect length in km
         self.lts = lts  # minimum length of a point time series in hrs
-        self.rts = rts  # max radious of a point time series in hrs
+        self.rts = rts  # max radious of a point time series in km
         self.dbslist = load_dbs_list(dbs_list)
         print("\nThere are", len(self.dbslist), " dbs to process\n")
         if out_fname is None:
@@ -77,7 +77,7 @@ def load_dbs_list(dbs_list):
             return dbslist
         else:
             print('Interpreting string input as a path to a single db')
-            return list(dbs_list)
+            return [dbs_list]
     elif isinstance(dbs_list, np.array):
         return dbs_list.tolist()
     elif isinstance(dbs_list, (list, tuple)):
