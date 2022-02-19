@@ -169,8 +169,12 @@ def full_meta_dump(db):
     bftfile = db + '.bft'
     dbinfo_file = os.path.split(os.path.split(db)[0])[0] + '/dbinfo.txt'
     if os.path.exists(bftfile):
-        with open(bftfile, 'r') as meta_file:
-            meta = meta_file.read()
+        try:
+            with open(bftfile, 'r') as meta_file:
+                meta = meta_file.read()
+        except UnicodeDecodeError:
+            with open(bftfile, 'rb') as meta_file:
+                meta = meta_file.read().decode(errors='replace')
     elif os.path.exists(dbinfo_file):
         with open(dbinfo_file, 'r') as meta_file:
             meta = meta_file.read()
@@ -203,7 +207,7 @@ def find_stations_restarts(data, mas, tst, lts, rts):
 
     if len(svel[gids]) == 0 or np.all(data.spd.mask):
         print("No transects to be found here")
-        g_dists = np.array([0])
+        g_dists = np.array([])
         c = None
         dts = round(np.ma.median(np.diff(data.dday)) * 3600. * 24)
     elif len(breaks) != 0:
