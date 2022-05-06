@@ -9,7 +9,7 @@ imagesize==1.2.0
 iniconfig==1.1.1
 Jinja2==3.0.1
 MarkupSafe==2.0.1
-numpy==1.20.3
+numpy>=1.20.3
 packaging==20.9
 pip==21.1.2
 pluggy==0.13.1
