@@ -20,9 +20,9 @@ from pycurrents.system import Bunch
 from pycurrents.file import npzfile
 from pycurrents.adcp.panelplotter import get_netCDF_data
 from scipy.stats import mode as Mode
-from pysadcp import read_meta_from_bft
-from pysadcp import read_meta_from_dbinfo
-from pysadcp import find_most_common_position
+from .pysadcp import read_meta_from_bft
+from .pysadcp import read_meta_from_dbinfo
+from .pysadcp import find_most_common_position
 
 
 class RunParams:
