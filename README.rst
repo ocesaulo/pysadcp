@@ -23,11 +23,13 @@ Tools to organize, handle and analyze shipboard ADCP data sets
 Installation
 ------------
 
-1) pip install from this repository::
+1) install CODAS + pycurrents
+
+download the enviroment.yml file here and use it to create an enviroment, then follow steps 1.4.1 onwards: https://currents.soest.hawaii.edu/docs/adcp_doc/codas_setup/codas_config/index.html
+
+2) pip install from this repository::
 
     pip install git+https://github.com/ocesaulo/pysadcp.git@develop
-
-2) install CODAS + pycurrents (follow steps 1.4.1 onwards: https://currents.soest.hawaii.edu/docs/adcp_doc/codas_setup/codas_config/index.html)
 
 Usage/Example
 -----
@@ -38,7 +40,7 @@ Run sample test::
 Requirements
 ^^^^^^^^^^^^
 
-Requires pycurrents and CODAS ().
+Requires pycurrents and CODAS (and their dependencies).
 Additional requirements see requirements.txt
 
 Compatibility
