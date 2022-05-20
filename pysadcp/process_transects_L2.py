@@ -5,6 +5,7 @@ L2 transect processing
 '''
 
 import numpy as np
+from datetime import datetime
 # import matplotlib.pyplot as plt
 # from mpl_toolkits.basemap import Basemap
 from scipy.signal import windows as windows
@@ -12,33 +13,22 @@ from scipy.ndimage import filters
 from scipy.interpolate import interp1d
 from pycurrents.system import Bunch
 from pycurrents.data.navcalc import (great_circle_distance, diffxy_from_lonlat)
-from datetime import datetime
-from adcp_swot import translate_inst_str
+from pysacp.pysadcp import translate_inst_str
 # from pycurrents.file import npzfile
 
 
-dameth = .7  # method of interpolation for regularization
+dameth = .7  # method of for regularization of grid
 dlm = 2.  # segment nominal regular grid resolution in km
 Nr = 500.  # segment nominal regular grid length in km
 slen = 500.
 gp_tol = 10  # max small gap percent tolerated
 gs_tol = 20.  # max gap size in km tolerated
 
-# domain specifications:
-# lsl, rsl = -125., -60.
-# tsl, bsl = -5., -25.
+# domain specifications (for reductions):
 lsl, rsl = -155., -90.
 tsl, bsl = 25., 5.
 
 # define target depths:
-# dois = [29., 45., 125., 240., 500.]  # depths of interest
-# dois = [15., ]  # depths of interest
-# tdep_tol = 4.  # ought to be a function of sonar; used in determining depth bin
-# dois = [15., 29., 45., 125., 240., 500.]  # depths of interest
-# tdep_tol = [4., 4., 8., 8., 16., 16.]  # ought to be a function of sonar; used in determining depth bin
-dois = [29., ]  # depths of interest
-tdep_tol = [8.]  # ought to be a function of sonar; used in determining depth bin
-
 dois = [15., 29., 45., 62, 125., 240., 350., 500., 1000.]  # depths of interest
 tdep_tol = [4., 8., 8., 8., 16., 16., 32., 32., 32.]  # ought to be a function of sonar; used in determining depth bin
 
@@ -47,8 +37,23 @@ tp = 33  # in hrs; running filter window length for uship/vship smoothing
 # nbas = [1, 1, 1, 1, 3, 3, 5, 7, 9]  # ideally also done by sonar freq; give layer
 nbas = [1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3]
 
+out_dir = './data/proc_adcp/proc_seg_stacks/'
+out_stack_filename_hdr = "stacks_global_z"
+
 
 class TransectsDB:
+    """
+    Workhorse class to represent and intereact with a transects database.
+
+    methods:
+
+        pre_process(transects, binavg)
+
+        method to select subregions and depth slices, and performing
+        vertical averaging and assessments of gaps
+
+    """
+
     def __init__(self, transects,):
         self.sonars = self._heal_sonars(transects['inst_id'])
         self.vessels = self._clip_str(transects['vessel_id'])
@@ -72,6 +77,7 @@ class TransectsDB:
         self.transects = transects
 
     def _heal_sonars(self, sonars):
+        # the dict below should be imported from pysadcp
         accepted_sonar_strs = {'wh300', 'wh600', 'wh1200', 'bb150', 'nb150',
                                'os150nb', 'os150bb', 'os150??', 'os150',
                                'os75nb', 'os75bb', 'os75??', 'os75', 'os38nb',
@@ -914,113 +920,124 @@ def to_stack(proc_segs_list):
     return dastack, acheck
 
 
-out_dir = './data/proc_adcp/proc_seg_stacks/'
-out_stack_filename_hdr = "stacks_global_jascomplete_z"
-Wlut = np.asarray(alltran.Wlut)
-Dcover = np.asarray(alltran.Dcover)
-Didx = np.asarray(alltran.Didx)
-Adep = np.asarray(alltran.Adep)
-Nngaps = np.asarray(alltran.Nngaps)
-Ngap_max = np.asarray(alltran.Ngap_max)
-Nidxs = np.reshape(np.asarray(alltran.Nidxs), Didx.shape)
-for d in range(0, len(dois)):
-    idxs = Nidxs[:, d]
-    didx = Didx[:, d]
-    adep = Adep[:, d]
-    nngaps = Nngaps[:, d]
-    ngap_max = Ngap_max[:, d]
-    valid_ones = np.logical_and(Dcover > 0e0, ngap_max < 1e20)
-    wlut = Wlut[valid_ones]
-    outputs = find_large_gaps_and_clip(alltran.transects[wlut], idxs[valid_ones],
-                                       didx[valid_ones], adep[valid_ones],
-                                       Dcover[valid_ones], nngaps[valid_ones],
-                                       ngap_max[valid_ones])
+def main():
+    """
+    Runs the loop for desired target depths and writes final stack data file
 
-    flut, idxs = outputs[0], outputs[1]
-    didx, adep = outputs[2], outputs[3]
-    dcover, ngaps, gapmax = outputs[4], outputs[5], outputs[6]
+    TODO: improve this main and the initialization, including the loading stage
+    to use the netcdf functions and files
+    """
+    transects_dbs = np.load('./data/proc/transects_dbs_in_dir_codas_dbs.npz',
+                            allow_pickle=True,)['seg_dbase']
+    alltran = TransectsDB(transecs_dbs)
+    Wlut = np.asarray(alltran.Wlut)
+    Dcover = np.asarray(alltran.Dcover)
+    Didx = np.asarray(alltran.Didx)
+    Adep = np.asarray(alltran.Adep)
+    Nngaps = np.asarray(alltran.Nngaps)
+    Ngap_max = np.asarray(alltran.Ngap_max)
+    Nidxs = np.reshape(np.asarray(alltran.Nidxs), Didx.shape)
+    for d in range(0, len(dois)):
+        idxs = Nidxs[:, d]
+        didx = Didx[:, d]
+        adep = Adep[:, d]
+        nngaps = Nngaps[:, d]
+        ngap_max = Ngap_max[:, d]
+        valid_ones = np.logical_and(Dcover > 0e0, ngap_max < 1e20)
+        wlut = Wlut[valid_ones]
+        outputs = find_large_gaps_and_clip(alltran.transects[wlut], idxs[valid_ones],
+                                           didx[valid_ones], adep[valid_ones],
+                                           Dcover[valid_ones], nngaps[valid_ones],
+                                           ngap_max[valid_ones])
 
-    # pass again on find_large_gaps_and_clip:
-    gs_tol = 15.  # [15., 10., 5.]
-    chosen_ones = np.logical_and(ngaps > gp_tol, dcover >= slen)
-    # chosen_ones = np.logical_and(gapmax > gs_tol, chosen_ones)
-    if np.any(chosen_ones):
-        outputs = find_large_gaps_and_clip(flut[chosen_ones],
-                                           idxs[chosen_ones],
-                                           didx[chosen_ones],
-                                           adep[chosen_ones],
-                                           dcover[chosen_ones],
-                                           ngaps[chosen_ones],
-                                           gapmax[chosen_ones])
+        flut, idxs = outputs[0], outputs[1]
+        didx, adep = outputs[2], outputs[3]
+        dcover, ngaps, gapmax = outputs[4], outputs[5], outputs[6]
 
-        if len(outputs[0]) > 0:
-            new_goods = np.logical_and(outputs[-3] >= slen,
-                                       np.round(outputs[-2]) <= gp_tol)
-            flut = np.concatenate((flut[~chosen_ones], outputs[0][new_goods]))
-            if outputs[1].ndim > 1:
-                dummy1 = np.empty((outputs[1][new_goods].shape[0],), dtype='O')
-                for n, vals in enumerate(outputs[1][new_goods]):
-                    dummy1[n] = vals
-                idxs = np.concatenate((idxs[~chosen_ones], dummy1))
-                dummy2 = np.empty((outputs[2][new_goods].shape[0],), dtype='O')
-                for n, vals in enumerate(outputs[2][new_goods]):
-                    dummy2[n] = vals
-                # dummy2[0] = outputs[2][0, ...]
-                didx = np.concatenate((didx[~chosen_ones], dummy2))
-            else:
-                idxs = np.concatenate((idxs[~chosen_ones], outputs[1][new_goods]))
-                didx = np.concatenate((didx[~chosen_ones], outputs[2][new_goods]))
-            adep = np.concatenate((adep[~chosen_ones], outputs[3][new_goods]))
-            dcover = np.concatenate((dcover[~chosen_ones], outputs[4][new_goods]))
-            ngaps = np.concatenate((ngaps[~chosen_ones], outputs[5][new_goods]))
-            gapmax = np.concatenate((gapmax[~chosen_ones], outputs[6][new_goods]))
+        # pass again on find_large_gaps_and_clip:
+        gs_tol = 15.  # [15., 10., 5.]
+        chosen_ones = np.logical_and(ngaps > gp_tol, dcover >= slen)
+        # chosen_ones = np.logical_and(gapmax > gs_tol, chosen_ones)
+        if np.any(chosen_ones):
+            outputs = find_large_gaps_and_clip(flut[chosen_ones],
+                                               idxs[chosen_ones],
+                                               didx[chosen_ones],
+                                               adep[chosen_ones],
+                                               dcover[chosen_ones],
+                                               ngaps[chosen_ones],
+                                               gapmax[chosen_ones])
 
-
-    # and again on the leftovers:
-    gs_tol = 10.  # [15., 10., 5.]
-    chosen_ones = np.logical_and(outputs[5][~new_goods] > gp_tol,
-                                 outputs[4][~new_goods] >= slen)
-    if np.any(chosen_ones):
-        outputs = find_large_gaps_and_clip(outputs[0][~new_goods][chosen_ones],
-                                           outputs[1][~new_goods][chosen_ones],
-                                           outputs[2][~new_goods][chosen_ones],
-                                           outputs[3][~new_goods][chosen_ones],
-                                           outputs[4][~new_goods][chosen_ones],
-                                           outputs[5][~new_goods][chosen_ones],
-                                           outputs[6][~new_goods][chosen_ones])
-
-        if len(outputs[0]) > 0:
-            new_goods = np.logical_and(outputs[-3] >= slen,
-                                       np.floor(outputs[-2]) <= gp_tol)
-            flut = np.concatenate((flut, outputs[0][new_goods]))
-            if outputs[1].ndim > 1:
-                dummy1 = np.empty((outputs[1][new_goods].shape[0],), dtype='O')
-                for n, vals in enumerate(outputs[1][new_goods]):
-                    dummy1[n] = vals
-                idxs = np.concatenate((idxs[~chosen_ones], dummy1))
-                dummy2 = np.empty((outputs[2][new_goods].shape[0],), dtype='O')
-                for n, vals in enumerate(outputs[2][new_goods]):
-                    dummy2[n] = vals
-                # dummy2[0] = outputs[2][0, ...]
-                didx = np.concatenate((didx, dummy2))
-            else:
-                idxs = np.concatenate((idxs, outputs[1][new_goods]))
-                didx = np.concatenate((didx, outputs[2][new_goods]))
-            adep = np.concatenate((adep, outputs[3][new_goods]))
-            dcover = np.concatenate((dcover, outputs[4][new_goods]))
-            ngaps = np.concatenate((ngaps, outputs[5][new_goods]))
-            gapmax = np.concatenate((gapmax, outputs[6][new_goods]))
+            if len(outputs[0]) > 0:
+                new_goods = np.logical_and(outputs[-3] >= slen,
+                                           np.round(outputs[-2]) <= gp_tol)
+                flut = np.concatenate((flut[~chosen_ones], outputs[0][new_goods]))
+                if outputs[1].ndim > 1:
+                    dummy1 = np.empty((outputs[1][new_goods].shape[0],), dtype='O')
+                    for n, vals in enumerate(outputs[1][new_goods]):
+                        dummy1[n] = vals
+                    idxs = np.concatenate((idxs[~chosen_ones], dummy1))
+                    dummy2 = np.empty((outputs[2][new_goods].shape[0],), dtype='O')
+                    for n, vals in enumerate(outputs[2][new_goods]):
+                        dummy2[n] = vals
+                    # dummy2[0] = outputs[2][0, ...]
+                    didx = np.concatenate((didx[~chosen_ones], dummy2))
+                else:
+                    idxs = np.concatenate((idxs[~chosen_ones], outputs[1][new_goods]))
+                    didx = np.concatenate((didx[~chosen_ones], outputs[2][new_goods]))
+                adep = np.concatenate((adep[~chosen_ones], outputs[3][new_goods]))
+                dcover = np.concatenate((dcover[~chosen_ones], outputs[4][new_goods]))
+                ngaps = np.concatenate((ngaps[~chosen_ones], outputs[5][new_goods]))
+                gapmax = np.concatenate((gapmax[~chosen_ones], outputs[6][new_goods]))
 
 
-    # subset again the list based on the update info:
-    gs_tol = 20.
-    sidx = np.logical_and(dcover >= slen, ngaps <= gp_tol)
-    sidx = np.logical_and(sidx, gapmax <= gs_tol)
-    proc_segs_list = []
-    for atransect, nav_inds, dep_inds in zip(flut[sidx], idxs[sidx], didx[sidx]):
-        RT = to_regular_transect(atransect, nav_inds, dep_inds, nbas[d], dameth, dlm)
-        SG = to_overlaping_segment(RT, .5)
-        proc_segs_list.append(SG)
-    dastack, acheck = to_stack(proc_segs_list)
-    out_stack_filename = out_stack_filename_hdr + str(int(dois[d])) + '.npz'
-    np.savez_compressed(out_dir + out_stack_filename, data_stack=dastack)
+        # and again on the leftovers:
+        gs_tol = 10.  # [15., 10., 5.]
+        chosen_ones = np.logical_and(outputs[5][~new_goods] > gp_tol,
+                                     outputs[4][~new_goods] >= slen)
+        if np.any(chosen_ones):
+            outputs = find_large_gaps_and_clip(outputs[0][~new_goods][chosen_ones],
+                                               outputs[1][~new_goods][chosen_ones],
+                                               outputs[2][~new_goods][chosen_ones],
+                                               outputs[3][~new_goods][chosen_ones],
+                                               outputs[4][~new_goods][chosen_ones],
+                                               outputs[5][~new_goods][chosen_ones],
+                                               outputs[6][~new_goods][chosen_ones])
+
+            if len(outputs[0]) > 0:
+                new_goods = np.logical_and(outputs[-3] >= slen,
+                                           np.floor(outputs[-2]) <= gp_tol)
+                flut = np.concatenate((flut, outputs[0][new_goods]))
+                if outputs[1].ndim > 1:
+                    dummy1 = np.empty((outputs[1][new_goods].shape[0],), dtype='O')
+                    for n, vals in enumerate(outputs[1][new_goods]):
+                        dummy1[n] = vals
+                    idxs = np.concatenate((idxs[~chosen_ones], dummy1))
+                    dummy2 = np.empty((outputs[2][new_goods].shape[0],), dtype='O')
+                    for n, vals in enumerate(outputs[2][new_goods]):
+                        dummy2[n] = vals
+                    # dummy2[0] = outputs[2][0, ...]
+                    didx = np.concatenate((didx, dummy2))
+                else:
+                    idxs = np.concatenate((idxs, outputs[1][new_goods]))
+                    didx = np.concatenate((didx, outputs[2][new_goods]))
+                adep = np.concatenate((adep, outputs[3][new_goods]))
+                dcover = np.concatenate((dcover, outputs[4][new_goods]))
+                ngaps = np.concatenate((ngaps, outputs[5][new_goods]))
+                gapmax = np.concatenate((gapmax, outputs[6][new_goods]))
+
+
+        # subset again the list based on the update info:
+        gs_tol = 20.
+        sidx = np.logical_and(dcover >= slen, ngaps <= gp_tol)
+        sidx = np.logical_and(sidx, gapmax <= gs_tol)
+        proc_segs_list = []
+        for atransect, nav_inds, dep_inds in zip(flut[sidx], idxs[sidx], didx[sidx]):
+            RT = to_regular_transect(atransect, nav_inds, dep_inds, nbas[d], dameth, dlm)
+            SG = to_overlaping_segment(RT, .5)
+            proc_segs_list.append(SG)
+        dastack, acheck = to_stack(proc_segs_list)
+        out_stack_filename = out_stack_filename_hdr + str(int(dois[d])) + '.npz'
+        np.savez_compressed(out_dir + out_stack_filename, data_stack=dastack)
+
+if __name__ == '__main__':
+    main()
