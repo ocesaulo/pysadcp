@@ -20,19 +20,20 @@ from pycurrents.system import Bunch
 from pycurrents.file import npzfile
 from pycurrents.adcp.panelplotter import get_netCDF_data
 from scipy.stats import mode as Mode
-from .pysadcp import read_meta_from_bft
-from .pysadcp import read_meta_from_dbinfo
-from .pysadcp import find_most_common_position
+from pysadcp.pysadcp import read_meta_from_bft
+from pysadcp.pysadcp import read_meta_from_dbinfo
+from pysadcp.pysadcp import find_most_common_position
 
 
 class RunParams:
     def __init__(self, dbs_list, out_dir, out_fname=None, mas=3., tst=2.,
-                 mtl=50., lts=6., rts=.2):
+                 mtl=50., lts=6., rts=.2, st_spd=.5):
         self.mas = mas  # minimum average ship speed during segment in m/s
         self.tst = tst  # tolarated stop time in hrs (longer will be split)
         self.mtl = mtl  # minimum segment/transect length in km
         self.lts = lts  # minimum length of a point time series in hrs
         self.rts = rts  # max radious of a point time series in km
+        self.st_spd = st_spd  # allowed ship speeds in a point time series (m/s)
         self.dbslist = load_dbs_list(dbs_list)
         print("\nThere are", len(self.dbslist), " dbs to process\n")
         if out_fname is None:
@@ -149,12 +150,16 @@ def read_codas_db_wrap(db):
 
 def read_metadata_wrap(data, db):
     bftfile = db + '.bft'
-    dbinfo_file = os.path.split(os.path.split(db)[0])[0] + '/dbinfo.txt'
+    dbinfo_file = os.path.split(db)[0] + '/dbinfo.txt'
+    cruise_info_file = os.path.split(db)[0] + '/cruise_info.txt'
     if os.path.exists(bftfile):
         cruise_id, instru_id, vessel_id, sac_id = read_meta_from_bft(bftfile)
     elif os.path.exists(dbinfo_file):
         cruise_id, instru_id, vessel_id = read_meta_from_dbinfo(dbinfo_file)
-        sac_id = 'None; UH repo?'
+        sac_id = 'None; R2R repo?'
+    elif os.path.exists(cruise_info_file):
+        cruise_id, instru_id, vessel_id = read_meta_from_dbinfo(cruise_info_file)
+        sac_id = 'None; R2R repo?'
     else:
         print('No meta data file found!')
         cruise_id = 'unknown_no_metafile'
@@ -185,7 +190,7 @@ def full_meta_dump(db):
     return meta
 
 
-def find_stations_restarts(data, mas, tst, lts, rts):
+def find_stations_restarts(data, mas, tst, lts, rts, st_spd):
     svel = data.spd  # ship speed timeseries, need to ensure nav masks are same
     gids = svel > mas
 
@@ -298,7 +303,7 @@ def find_stations_restarts(data, mas, tst, lts, rts):
             c[0], c[-1] = 0, len(svel) - 1
 
     # time series processing:
-    gids = svel > .5
+    gids = svel > st_spd
     dto = np.diff(data.dday[~gids])  # time intervals when stopping
     # mov = np.where(dto > (1.02 * dts / 3600. / 24))[0]  # iterative points??
     mov = np.where(dto > (1. / 24))[0] + 1  # iterative points??
@@ -384,7 +389,8 @@ def eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas, cruise_id,
     counter = 0
     for n in range(0, nsegs):
         ndp = np.ma.count(svel[c[n]:c[n+1] + 1])  # num of valid nav pts
-        if ndp < 20:
+        msvel = np.mean(svel[c[n]:c[n+1] + 1])
+        if ndp < int(mtl / (dts * msvel *1e-3)):
             print('Not enough points in this chunk, skipping to the next')
         else:
             g_dist = g_dists[n]  # great circle distance between start/end pts
@@ -460,7 +466,7 @@ def eval_proc_timeseries(data, ts_len, tinds, nts, dts, lts, rts, cruise_id,
     counter = 0
     for n in range(0, nts):
         ndp = np.ma.count(data.spd[tinds[n]])  # num of valid nav pts
-        if ndp < 36:
+        if ndp < int(lts / (dts * 3600.)):
             print('Not enough points in this series, skipping to the next')
         else:
             if (ts_len[n] * 24 >= lts and ndp >= gndp):
@@ -518,7 +524,7 @@ def eval_proc_timeseries(data, ts_len, tinds, nts, dts, lts, rts, cruise_id,
     return ts_lut
 
 
-def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts):
+def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts, st_spd):
     # iterate and segment:
     lut = []  # this list will be appended with each useful transect
     ts_lut = []  # this list will be appended with each useful timeseries
@@ -538,8 +544,8 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts):
         # start processing here:
 
         # check if there are breaks:
-        g_dists, c, ts_len, tinds, dts = find_stations_restarts(data, mas,
-                                                                tst, lts, rts)
+        g_dists, c, ts_len, tinds, dts = find_stations_restarts(data, mas, tst,
+                                                                lts, rts, st_spd)
 
         meta = full_meta_dump(d)
 
@@ -679,7 +685,8 @@ def main():
     # write to file
     configs = configure()
     lut, ts_lut = loop_proc_dbs(configs.dbslist, configs.mas, configs.tst,
-                                configs.mtl, configs.lts, configs.rts)
+                                configs.mtl, configs.lts, configs.rts,
+                                configs.st_spd)
     save_lut(configs.output_files_ids[0], lut)
     save_lut(configs.output_files_ids[1], ts_lut)
 
