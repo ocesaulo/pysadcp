@@ -26,6 +26,9 @@ from pysadcp.pysadcp import find_most_common_position
 
 
 class RunParams:
+    """
+    Class to contain script input parameters
+    """
     def __init__(self, dbs_list, out_dir, out_fname=None, mas=3., tst=2.,
                  mtl=50., lts=6., rts=.2, st_spd=.5):
         self.mas = mas  # minimum average ship speed during segment in m/s
@@ -191,6 +194,21 @@ def full_meta_dump(db):
 
 
 def find_stations_restarts(data, mas, tst, lts, rts, st_spd):
+    """
+    Main work horse function to find the indices when the ship is
+    conducting a transect and when the ship is on station.
+
+    The main logic is to use ship speed:
+
+    Transects are when the ship is moving above a threshold speed
+    (e.g. low if tows are of interest; high if only transits). Certain
+    short stops os slow downs can be ignored.
+
+    Stations are when the ship is at a speed lower than a different
+    threshold than for stations; then computations follow to ensure only
+    positions within a radius and without too long of breaks
+
+    """
     svel = data.spd  # ship speed timeseries, need to ensure nav masks are same
     gids = svel > mas
 
