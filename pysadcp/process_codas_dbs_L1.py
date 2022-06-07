@@ -91,7 +91,7 @@ def load_dbs_list(dbs_list):
 
 def prep_out_dir(out_dir, out_fname):
     toutfilename = 'transects_' + out_fname
-    poutfilename = 'point_timeseries_' + out_fname
+    poutfilename = 'stations_' + out_fname
 
     if out_dir[-1] == '/':
         output_file_id = out_dir + toutfilename + '.npz'
@@ -105,10 +105,10 @@ def prep_out_dir(out_dir, out_fname):
     if os.path.exists(output_file_id):
         print('Transect output file already exists, this will overwrite it!')
     if os.path.exists(output2_file_id):
-        print('Timeseries output file already exists, this will overwrite it!')
+        print('Stations output file already exists, this will overwrite it!')
 
     print("Output directory and file for transects is " + output_file_id)
-    print("Output directory and file for timeseries is " + output2_file_id)
+    print("Output directory and file for stations is " + output2_file_id)
     return output_file_id, output2_file_id
 
 
