@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-'''
+"""
 Workhorse script to turn several CODAS dbs (cruises) into a data set of
 transects and time series.
 
 Input: (path to) CODAS dbs list
 Output: L1 processed ADCP data and meta-data into transects or point timeseries
-'''
+"""
 
 
 import numpy as np
@@ -20,9 +20,9 @@ from pycurrents.system import Bunch
 from pycurrents.file import npzfile
 from pycurrents.adcp.panelplotter import get_netCDF_data
 from scipy.stats import mode as Mode
-from pysadcp.pysadcp import read_meta_from_bft
-from pysadcp.pysadcp import read_meta_from_dbinfo
-from pysadcp.pysadcp import find_most_common_position
+from .pysadcp import read_meta_from_bft
+from .pysadcp import read_meta_from_dbinfo
+from .pysadcp import find_most_common_position
 
 
 class RunParams:
