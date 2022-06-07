@@ -25,6 +25,7 @@ pip-delete-this-directory.txt
 # Sphinx documentation
 docs/_build/
 doc/_build/
+docs/build/
 
 *.zip
 # *.mat   # we might want other .mat files for tests

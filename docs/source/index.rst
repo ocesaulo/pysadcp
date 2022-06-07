@@ -14,6 +14,10 @@ Tools to organize, handle and analyze shipboard ADCP data sets
 
    readme
 
+**Help & reference**
+
+* :doc:`api`
+
 Indices and tables
 ==================
 
