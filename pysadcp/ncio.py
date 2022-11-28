@@ -12,7 +12,7 @@ import argparse
 import datetime
 import logging
 from netCDF4 import Dataset
-# from pysadcp.process_L2 import TransectsDB
+from .process_transects_L2 import TransectsDB
 
 
 # Standard logging
