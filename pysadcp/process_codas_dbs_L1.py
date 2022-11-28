@@ -23,14 +23,28 @@ from scipy.stats import mode as Mode
 from .pysadcp import read_meta_from_bft
 from .pysadcp import read_meta_from_dbinfo
 from .pysadcp import find_most_common_position
+from .ncio import make_nc4
 
 
 class RunParams:
     """
-    Class to contain script input parameters
+    Class to set and contain input parameters for L1 processing
+
+    Input:
+          a single CODAS db path or a collection of CODAS dbs paths in the form of
+          (1) list or tuple; (2) a path to a directory with CODAS dbs
+          (must end with * or /); (3) a special npz file (deprecated)
+
+          an output directory to place the L1 processed data
+
+    Optional inputs:
+          output filename (str)
+          format of output (defaults to 'nc' for netCDF)
+          various run parameters and quality flags
     """
-    def __init__(self, dbs_list, out_dir, out_fname=None, mas=3., tst=2.,
-                 mtl=50., lts=6., rts=.2, st_spd=.5):
+
+    def __init__(self, dbs_list, out_dir, out_fname=None, out_nc=True,
+                 mas=3., tst=2., mtl=50., lts=6., rts=.2, st_spd=.5):
         self.mas = mas  # minimum average ship speed during segment in m/s
         self.tst = tst  # tolarated stop time in hrs (longer will be split)
         self.mtl = mtl  # minimum segment/transect length in km
@@ -38,7 +52,9 @@ class RunParams:
         self.rts = rts  # max radious of a point time series in km
         self.st_spd = st_spd  # allowed ship speeds in a point time series (m/s)
         self.dbslist = load_dbs_list(dbs_list)
+
         print("\nThere are", len(self.dbslist), " dbs to process\n")
+
         if out_fname is None:
             if isinstance(dbs_list, (str, bytes)):
                 if dbs_list[-4:] == '.npz':
@@ -53,7 +69,7 @@ class RunParams:
                     out_fname = 'db_' + os.path.split(dbs_list)[-1]
             else:
                 out_fname = 'unknown_dbs'
-        self.output_files_ids = prep_out_dir(out_dir, out_fname)
+        self.output_files_ids = prep_out_dir(out_dir, out_fname, out_nc)
 
 
 def load_dbs_list(dbs_list):
@@ -82,7 +98,7 @@ def load_dbs_list(dbs_list):
         else:
             print('Interpreting string input as a path to a single db')
             return [dbs_list]
-    elif isinstance(dbs_list, np.array):
+    elif isinstance(dbs_list, np.ndarray):
         return dbs_list.tolist()
     elif isinstance(dbs_list, (list, tuple)):
         return dbs_list
@@ -92,16 +108,22 @@ def load_dbs_list(dbs_list):
         raise TypeError(error_message)
 
 
-def prep_out_dir(out_dir, out_fname):
+def prep_out_dir(out_dir, out_fname, out_nc):
     toutfilename = 'transects_' + out_fname
     poutfilename = 'stations_' + out_fname
 
     if out_dir[-1] == '/':
         output_file_id = out_dir + toutfilename + '.npz'
         output2_file_id = out_dir + poutfilename + '.npz'
+        if out_nc:
+            ncoutput_file_id = out_dir + toutfilename + '.nc'
+            ncoutput2_file_id = out_dir + poutfilename + '.nc'
     else:
         output_file_id = out_dir + '/' + toutfilename + '.npz'
         output2_file_id = out_dir + '/' + poutfilename + '.npz'
+        if out_nc:
+            ncoutput_file_id = out_dir + '/' + toutfilename + '.nc'
+            ncoutput2_file_id = out_dir + '/' + poutfilename + '.nc'
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
@@ -110,9 +132,16 @@ def prep_out_dir(out_dir, out_fname):
     if os.path.exists(output2_file_id):
         print('Stations output file already exists, this will overwrite it!')
 
-    print("Output directory and file for transects is " + output_file_id)
-    print("Output directory and file for stations is " + output2_file_id)
-    return output_file_id, output2_file_id
+    if out_nc:
+        print("Output directory and file for transects is " + output_file_id)
+        print("Output directory and netCDF file for transects is " + ncoutput_file_id)
+        print("Output directory and file for stations is " + output2_file_id)
+        print("Output directory and netCDF file for stations is " + ncoutput2_file_id)
+        return output_file_id, output2_file_id, ncoutput_file_id, ncoutput2_file_id
+    else:
+        print("Output directory and file for transects is " + output_file_id)
+        print("Output directory and file for stations is " + output2_file_id)
+        return output_file_id, output2_file_id
 
 
 def save_lut(output_file_id, lut):
@@ -156,13 +185,16 @@ def read_metadata_wrap(data, db):
     dbinfo_file = os.path.split(db)[0] + '/dbinfo.txt'
     cruise_info_file = os.path.split(db)[0] + '/cruise_info.txt'
     if os.path.exists(bftfile):
+        print('\nMeta data file: ' + bftfile)
         cruise_id, instru_id, vessel_id, sac_id = read_meta_from_bft(bftfile)
     elif os.path.exists(dbinfo_file):
+        print('\nMeta data file: ' + dbinfo_file)
         cruise_id, instru_id, vessel_id = read_meta_from_dbinfo(dbinfo_file)
-        sac_id = 'None; R2R repo?'
+        sac_id = 'No id; R2R repo?'
     elif os.path.exists(cruise_info_file):
+        print('\nMeta data file: ' + cruise_info_file)
         cruise_id, instru_id, vessel_id = read_meta_from_dbinfo(cruise_info_file)
-        sac_id = 'None; R2R repo?'
+        sac_id = 'No id; R2R repo?'
     else:
         print('No meta data file found!')
         cruise_id = 'unknown_no_metafile'
@@ -408,7 +440,10 @@ def eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas, cruise_id,
     for n in range(0, nsegs):
         ndp = np.ma.count(svel[c[n]:c[n+1] + 1])  # num of valid nav pts
         msvel = np.mean(svel[c[n]:c[n+1] + 1])
-        if ndp < int(mtl / (dts * msvel *1e-3)):
+        if np.ma.is_masked(msvel):
+            print(msvel)
+            msvel = 10.
+        if ndp == 0 or ndp < int(mtl / (dts * msvel *1e-3)):
             print('Not enough points in this chunk, skipping to the next')
         else:
             g_dist = g_dists[n]  # great circle distance between start/end pts
@@ -548,7 +583,7 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts, st_spd):
     ts_lut = []  # this list will be appended with each useful timeseries
 
     for m, d in enumerate(dbslist):
-        print("doing database: ", d)
+        print("\ndoing database: ", d)
         data = read_codas_db_wrap(d)
         if data is None:
             continue
@@ -571,7 +606,7 @@ def loop_proc_dbs(dbslist, mas, tst, mtl, lts, rts, st_spd):
         print("DB " + d + " has", nsegs, "transects to evaluate")
 
         nts = len(ts_len)
-        print("DB " + d + " has", nts, "point timeseries to evaluate")
+        print("DB " + d + " has", nts, "stations to evaluate")
 
         if nsegs > 0:
             lut = eval_proc_transects(data, g_dists, c, nsegs, dts, mtl, mas,
@@ -665,6 +700,9 @@ def _configure(arg1, arg2, arg3=None, arg4=None, arg5=None, arg6=None,
     parser.add_argument("-out_fname",
                         help="output file name; optional",
                         type=str)
+    parser.add_argument("-out_nc",
+                        help="write to netCDF if True; optional",
+                        type=str)
     parser.add_argument("-mas",
                         help="minimum average ship speed in transect (m/s)",
                         type=float)
@@ -675,10 +713,13 @@ def _configure(arg1, arg2, arg3=None, arg4=None, arg5=None, arg6=None,
                         help="minimum usable transect length (km)",
                         type=float)
     parser.add_argument("-lts",
-                        help="minimum length of usable pt timeseries (hrs)",
+                        help="minimum duration of usable station timeseries (hrs)",
                         type=float)
     parser.add_argument("-rts",
-                        help="maximum radious for a pt timeseries (km)",
+                        help="maximum radious for a station (km)",
+                        type=float)
+    parser.add_argument("-st_spd",
+                        help="maximum ship speed allowed during station (m/s)",
                         type=float)
     # args = parser.parse_args([arg1, arg2])
     args = parser.parse_args([arg1, arg2, "-out_fname", arg3, "-mas", arg4,
@@ -708,6 +749,11 @@ def main():
     save_lut(configs.output_files_ids[0], lut)
     save_lut(configs.output_files_ids[1], ts_lut)
 
+    if configs.out_nc:
+        run_conf_strs = [k + ' = ' + str(v) + ', ' for k, v in vars(configs).items() if type(v) is not list and type(v) is not tuple]
+        attrlist = [("run parameters:", ''.join(run_conf_strs)), ]
+        make_nc4(lut, configs.output_files_ids[2],
+                 attrlist=attrlist, nc_compressed=False)
 
 if __name__ == '__main__':
     main()
